@@ -3,6 +3,41 @@
 import sys
 import numpy as np
 from PIL import Image as Img
+from binascii import crc32
+
+## ColorHash from https://pypi.org/project/colorhash/
+def hsl2rgb(h, s, l):
+  h /= 360
+  q = l * (1 + s) if l < 0.5 else l + s - l * s
+  p = 2 * l - q
+  rgb = []
+  for c in (h + 1 / 3, h, h - 1 / 3):
+    if c < 0:
+      c += 1
+    elif c > 1:
+      c -= 1
+    if c < 1 / 6:
+      c = p + (q - p) * 6 * c
+    elif c < 0.5:
+      c = q
+    elif c < 2 / 3:
+      c = p + (q - p) * 6 * (2 / 3 - c)
+    else:
+      c = p
+    rgb.append(round(c * 255))
+  return tuple(rgb)
+
+def colorHash(s):
+  saturation=(0.35, 0.5, 0.65)
+  hash = crc32(s.encode('utf-8')) & 0xffffffff
+  h = (hash % 359)
+  hash //= 360
+  s = saturation[hash % len(saturation)]
+  hash //= len(saturation)
+  l = 0.7
+  return hsl2rgb(h, s, l)
+
+####
 
 def createArray(content, contentLength):
   array = []
@@ -39,12 +74,12 @@ def getFileContents():
   content = content.split()
   return content
 
-def createImagePixels(contentLength, array):
+def createImagePixels(content, contentLength, array):
   img_array = np.zeros((contentLength, contentLength, 3), dtype=np.uint8)
   for i in range(contentLength):
     for u in range(contentLength):
       if array[i][u] > 0:
-        img_array[i][u] = [255, 255, 255]
+        img_array[i][u] = colorHash(content[i])
   return img_array
 
 def imageRender(contentLength, img):
@@ -57,8 +92,12 @@ def imageRender(contentLength, img):
 
 if __name__ == "__main__":
   file = checkArgs()
-  content = getFileContents()
+  try:
+    content = getFileContents()
+  except:
+    print('File is not text')
+    sys.exit(1)
   contentLength = len(content)
   array = createArray(content, contentLength)
-  img = Img.fromarray(createImagePixels(contentLength, array), 'RGB')
+  img = Img.fromarray(createImagePixels(content, contentLength, array), 'RGB')
   imageRender(contentLength, img)
